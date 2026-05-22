@@ -264,9 +264,19 @@ export default class GraphEntry {
       let updateGraphHistory = false;
 
       if (this._config.statistics) {
+        // For statistics, snap fetchEnd to the end of the day before `end`
+        // to prevent the API from including the first bucket of the next
+        // period.  Example: end=May 2nd → we want data only through April
+        // 30, so we set statsFetchEnd to April 30 23:59:59.999.
+        // Without this, the API returns the May 1st bucket which, after
+        // offset, appears as a phantom point on the last day of the chart.
+        const statsFetchEnd = new Date(end.getTime());
+        statsFetchEnd.setUTCHours(0, 0, 0, 0);          // Start of day in UTC
+        statsFetchEnd.setUTCDate(statsFetchEnd.getUTCDate() - 1);  // Previous day
+        statsFetchEnd.setTime(statsFetchEnd.getTime() - 1);         // 1ms before midnight
         const newHistory = await this._fetchStatistics(
           fetchStart,
-          fetchEnd,
+          statsFetchEnd,
           this._config.statistics.period,
           this._config.statistics.type || DEFAULT_STATISTICS_TYPE,
         );
@@ -281,9 +291,10 @@ export default class GraphEntry {
               // Skip boundary buckets that fall outside the actual series window.
               // The statistics API may include an extra bucket at the start
               // (from the previous period) and/or at the end (from the next
-              // period). We clamp to [start, end) using the true graph window.
+              // period). We clamp to [start, statsFetchEnd) so data stops at
+              // the last day of the target month.
               const bucketStart = new Date(item.start).getTime();
-              return bucketStart >= start.getTime() && bucketStart < end.getTime();
+              return bucketStart >= start.getTime() && bucketStart < statsFetchEnd.getTime();
             })
             .map((item) => {
               let stateParsed: number | null = null;
