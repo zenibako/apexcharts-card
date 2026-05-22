@@ -67,6 +67,8 @@ export interface StatisticValue {
   sum: number | null;
   state: number | null;
   change: number | null;
+  // Added to support HA 2026.x `types` filtering
+  [key: string]: number | null | string;
 }
 
 export type HassHistory = Array<[HassHistoryEntry] | undefined>;

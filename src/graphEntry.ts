@@ -264,43 +264,54 @@ export default class GraphEntry {
       let updateGraphHistory = false;
 
       if (this._config.statistics) {
-        const newHistory = await this._fetchStatistics(fetchStart, fetchEnd, this._config.statistics.period);
+        const newHistory = await this._fetchStatistics(
+          fetchStart,
+          fetchEnd,
+          this._config.statistics.period,
+          this._config.statistics.type || DEFAULT_STATISTICS_TYPE,
+        );
         if (newHistory && newHistory.length > 0) {
           updateGraphHistory = true;
           let lastNonNull: number | null = null;
           if (history && history.data && history.data.length > 0) {
             lastNonNull = history.data[history.data.length - 1][1];
           }
-          newStateHistory = newHistory.map((item) => {
-            let stateParsed: number | null = null;
-            [lastNonNull, stateParsed] = this._transformAndFill(
-              item[this._config.statistics?.type || DEFAULT_STATISTICS_TYPE],
-              item,
-              lastNonNull,
-            );
+          newStateHistory = newHistory
+            .filter((item) => {
+              // Skip boundary buckets that fall outside the requested fetch range
+              const bucketStart = new Date(item.start).getTime();
+              return bucketStart >= fetchStart!.getTime();
+            })
+            .map((item) => {
+              let stateParsed: number | null = null;
+              [lastNonNull, stateParsed] = this._transformAndFill(
+                item[this._config.statistics?.type || DEFAULT_STATISTICS_TYPE],
+                item,
+                lastNonNull,
+              );
 
-            let displayDate: Date | null = null;
-            const startDate = new Date(item.start);
-            if (!this._config.statistics?.align || this._config.statistics?.align === 'middle') {
-              if (this._config.statistics?.period === '5minute') {
-                displayDate = new Date(startDate.getTime() + 150000); // 2min30s
-              } else if (!this._config.statistics?.period || this._config.statistics.period === 'hour') {
-                displayDate = new Date(startDate.getTime() + 1800000); // 30min
-              } else if (this._config.statistics.period === 'day') {
-                displayDate = new Date(startDate.getTime() + 43200000); // 12h
-              } else if (this._config.statistics.period === 'week') {
-                displayDate = new Date(startDate.getTime() + 259200000); // 3.5d
+              let displayDate: Date | null = null;
+              const startDate = new Date(item.start);
+              if (!this._config.statistics?.align || this._config.statistics?.align === 'middle') {
+                if (this._config.statistics?.period === '5minute') {
+                  displayDate = new Date(startDate.getTime() + 150000); // 2min30s
+                } else if (!this._config.statistics?.period || this._config.statistics.period === 'hour') {
+                  displayDate = new Date(startDate.getTime() + 1800000); // 30min
+                } else if (this._config.statistics.period === 'day') {
+                  displayDate = new Date(startDate.getTime() + 43200000); // 12h
+                } else if (this._config.statistics.period === 'week') {
+                  displayDate = new Date(startDate.getTime() + 259200000); // 3.5d
+                } else {
+                  displayDate = new Date(startDate.getTime() + 1296000000); // 15d
+                }
+              } else if (this._config.statistics.align === 'start') {
+                displayDate = new Date(item.start);
               } else {
-                displayDate = new Date(startDate.getTime() + 1296000000); // 15d
+                displayDate = new Date(item.end);
               }
-            } else if (this._config.statistics.align === 'start') {
-              displayDate = new Date(item.start);
-            } else {
-              displayDate = new Date(item.end);
-            }
 
-            return [displayDate.getTime(), !Number.isNaN(stateParsed) ? stateParsed : null];
-          });
+              return [displayDate.getTime(), !Number.isNaN(stateParsed) ? stateParsed : null];
+            });
         }
       } else {
         const newHistory = await this._fetchRecent(
@@ -472,14 +483,19 @@ export default class GraphEntry {
     start: Date | undefined,
     end: Date | undefined,
     period: StatisticsPeriod = DEFAULT_STATISTICS_PERIOD,
+    statType?: string,
   ): Promise<StatisticValue[] | undefined> {
-    const statistics = await this._hass?.callWS<Statistics>({
+    const callData: any = {
       type: 'recorder/statistics_during_period',
       start_time: start?.toISOString(),
       end_time: end?.toISOString(),
       statistic_ids: [this._entityID],
       period,
-    });
+    };
+    if (statType) {
+      callData.types = [statType];
+    }
+    const statistics = await this._hass?.callWS<Statistics>(callData);
     if (statistics && this._entityID in statistics) {
       return statistics[this._entityID];
     }

@@ -381,8 +381,7 @@ class ChartsCard extends LitElement {
             ['donut', 'pie', 'radialBar'].includes(this._config?.chart_type) &&
             (!serie.group_by || serie.group_by?.func === 'raw') &&
             !serie.data_generator &&
-            !serie.statistics &&
-            !serie.offset
+            !serie.statistics
           );
           if (!this._headerColors[index]) {
             this._headerColors[index] = defColors[index % defColors.length];
