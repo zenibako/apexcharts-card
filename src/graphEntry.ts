@@ -257,7 +257,7 @@ export default class GraphEntry {
       const fetchStart = usableCache
         ? // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           new Date(history!.data[history!.data.length - 1][0] + 1)
-        : new Date(startHistory.getTime() + (this._config.group_by.func !== 'raw' ? 0 : -1));
+        : new Date(startHistory.getTime() + (this._config.statistics ? 0 : (this._config.group_by.func !== 'raw' ? 0 : -1)));
       const fetchEnd = end;
 
       let newStateHistory: EntityCachePoints = [];
@@ -278,9 +278,12 @@ export default class GraphEntry {
           }
           newStateHistory = newHistory
             .filter((item) => {
-              // Skip boundary buckets that fall outside the requested fetch range
+              // Skip boundary buckets from before the actual series start.
+              // fetchStart is shifted back by 1ms for raw history, which
+              // causes the statistics API to include the previous period's
+              // bucket. We filter using `start` (the true graph window).
               const bucketStart = new Date(item.start).getTime();
-              return bucketStart >= fetchStart!.getTime();
+              return bucketStart >= start.getTime();
             })
             .map((item) => {
               let stateParsed: number | null = null;
