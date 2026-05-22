@@ -278,12 +278,12 @@ export default class GraphEntry {
           }
           newStateHistory = newHistory
             .filter((item) => {
-              // Skip boundary buckets from before the actual series start.
-              // fetchStart is shifted back by 1ms for raw history, which
-              // causes the statistics API to include the previous period's
-              // bucket. We filter using `start` (the true graph window).
+              // Skip boundary buckets that fall outside the actual series window.
+              // The statistics API may include an extra bucket at the start
+              // (from the previous period) and/or at the end (from the next
+              // period). We clamp to [start, end) using the true graph window.
               const bucketStart = new Date(item.start).getTime();
-              return bucketStart >= start.getTime();
+              return bucketStart >= start.getTime() && bucketStart < end.getTime();
             })
             .map((item) => {
               let stateParsed: number | null = null;
